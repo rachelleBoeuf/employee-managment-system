@@ -1,27 +1,10 @@
 const inquirer = require('inquirer');
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
+let db;
 
-const db = mysql.createConnection(
-    {
-        host: 'localhost',
-        user: 'root',
-        password: 'Oioz18u4#',
-        database: 'employee_cms'
-    },
-    console.log('connection success')
-);
-
-//store cached data here for screens
-var employees = [];
-var departments = [];
-var roles = [];
-
-//setup bottom ui position
-var ui = new inquirer.ui.BottomBar();
-
-const MainMenu = async () => {
+const MainMenu = () => {
     let options = ['View All Employees','View All Roles','View All Departments','Add a Department','Add a Role','Add an Employee','Update Employee Role'];
-    let prompt = await inquirer.prompt([
+    let prompt = inquirer.prompt([
         {
             type: "list",
             message: "What action would you like?",
@@ -32,28 +15,149 @@ const MainMenu = async () => {
     .then(async (answers) => {
         switch(answers.action) {
             case "View All Employees":
-                await queryEmployees(printTable);
+                printTable(await queryTable('employee'));
                 break;
             case "View All Roles":
-                await queryRoles(printTable);
+                printTable(await queryTable('role'));
                 break;
             case "View All Departments":
-                await queryDepartments(printTable);
+                printTable(await queryTable('department'));
                 break;
             case "Add a Department":
-                break;
+                await addDepartment();
+                return;
             case "Add a Role":
-                break;
+                await addRole();
+                return;
             case "Add an Employee":
-                break;
+                await addEmployee();
+                return;
             case "Update Employee Role":
-                break;
-            default:
-                MainMenu();
+                await updateEmployeeRole();
+                return;
         }
 
-        //default on break
-        setTimeout(() => { MainMenu() }, 100);
+        //delay for all callbacks and console termination
+        delayMainMenu();
+    });
+}
+
+const delayMainMenu = () => {
+    setTimeout(() => { MainMenu() }, 100);
+}
+
+const addDepartment = async () => {
+    inquirer.prompt([
+        {
+            type: "input",
+            message: "Enter New Department Name:",
+            name: "name",
+        },
+    ])
+    .then(async (answers) => {
+        db.query('INSERT INTO department (name) VALUES (?)',[answers.name]);
+        printTable(await queryTable('department'));
+    });
+}
+
+const addRole = async () => {
+    inquirer.prompt([
+        {
+            type: "input",
+            message: "Enter New Role Name:",
+            name: "name",
+        },
+    ])
+    .then(async (answers) => {
+        db.query('INSERT INTO role (name) VALUES (?)',[answers.name]);
+        printTable(await queryTable('role'));
+    });
+}
+
+const addEmployee = async () => {
+    let managers = await getOptionIDList('employee', ['first_name', 'last_name']);
+    let departments = await getOptionIDList('department', ['name']);
+
+    inquirer.prompt([
+        {
+            type: "list",
+            message: "Who will be their Manager?",
+            choices: managers,
+            name: "manager_id",
+        },
+        {
+            type: "list",
+            message: "What Department will they work?",
+            choices: departments,
+            name: "department_id",
+        },
+    ])
+    .then(async (answers) => {
+        let roles = await getOptionIDList('role', ['title'], [{ department_id: answers.department_id }]);
+
+        inquirer.prompt([
+            {
+                type: "list",
+                message: "What Role will they work?",
+                choices: roles,
+                name: "role_id",
+            },
+            {
+                type: "input",
+                message: "Enter First Name:",
+                name: "first_name",
+            },
+            {
+                type: "input",
+                message: "Enter Last Name:",
+                name: "last_name",
+            },
+        ])
+        .then(async (employee) => {
+            console.log(answers.department_id);
+            console.log(employee);
+
+            db.query('INSERT INTO employee (role_id, manager_id, first_name, last_name) VALUES (?,?,?,?)',[employee.role_id, answers.manager_id, employee.first_name, employee.last_name]);
+            printTable(await queryTable('employee'));
+            delayMainMenu();
+        });
+    });
+}
+
+const updateEmployeeRole = async () => {
+    let departments = await getOptionIDList('department', ['name']);
+
+    inquirer.prompt([
+        {
+            type: "list",
+            message: "What Department will they work?",
+            choices: departments,
+            name: "department_id",
+        },
+    ])
+    .then(async (answers) => {
+        let roles = await getOptionIDList('role', ['title'], [{ department_id: answers.department_id }]);
+        let employees = await getOptionIDList('employee', ['first_name', 'last_name']);
+
+        inquirer.prompt([
+            {
+                type: "list",
+                message: "What Role will they switch to?",
+                choices: roles,
+                name: "role_id",
+            },
+            {
+                type: "list",
+                message: "Which Employee will switch roles?",
+                choices: employees,
+                name: "id",
+            },
+        ])
+        .then(async (answers) => {
+            db.query('UPDATE employee SET role_id='+answers.role_id+' WHERE id='+answers.id);
+            printTable(await queryTable('employee'));
+            delayMainMenu();
+        });
     });
 }
 
@@ -69,22 +173,66 @@ const printTable = (records) => {
     console.table(output);
 }
 
-const queryEmployees = (callback, fields = null) => {
-    db.query('SELECT * FROM employee', function (err, results) {
-        return callback(results);
-    });
+const getOptionIDList = async (table, fields, filters = []) => {
+    let options = [];
+    let records = await queryTable(table, fields, filters);
+
+    for (record in records) {
+        let option = { value: records[record].id, name: '' };
+        for (field in fields) {
+            option.name += ' ' + records[record][fields[field]];
+        }
+        option.name = option.name.trim();
+        options.push(option);
+    }
+
+    return options;
 }
 
-const queryRoles = (callback, fields = null) => {
-    db.query('SELECT * FROM role', function (err, results) {
-        return callback(results);
-    });
+const selectors = (fields) => {
+    if (fields[0] == '*') {
+        return fields[0]; //return back only option
+    } else {
+        let selectors = fields.slice();
+        //remove id if added manually
+        if (selectors.indexOf('id') !== -1)
+            selectors.splice(selectors.indexOf('id'), 1);
+
+        //add id back for primaryKey
+        selectors.push('id')
+        return '`' + selectors.join('`,`') + '`';
+    }
 }
 
-const queryDepartments = (callback, fields = null) => {
-    db.query('SELECT * FROM department', function (err, results) {
-        return callback(results);
-    });
+const filters = (filters) => {
+    if (filters.length === 0)
+        return '';
+    let conditions = '';
+    for(filter in filters) {
+        for(key in filters[filter]) {
+            conditions += '`' + key + '` = "' + filters[filter][key] + '"';
+        }
+        conditions += ' AND ';
+    }
+    conditions = 'WHERE ' + conditions.substr(0, conditions.length - 5);
+    return conditions;
 }
 
-MainMenu();
+const queryTable = async (table, fields = ['*'], filter = []) => {
+    console.log('SELECT ' + selectors(fields) + ' FROM ' + table + ' ' + filters(filter));
+    let [records] = await db.execute('SELECT ' + selectors(fields) + ' FROM ' + table + ' ' + filters(filter));
+    return records;
+}
+
+async function initialize() {
+    db = await mysql.createConnection(
+        {
+            host: 'localhost',
+            user: 'root',
+            password: 'Oioz18u4#',
+            database: 'employee_cms'
+        },
+        console.log('====> DB Connection Success <====')
+    );
+}
+initialize().then(delayMainMenu);
