@@ -19,9 +19,8 @@ SOURCE db/seeds.sql
 ## Visuals
 
 
-// INSERT VIDEO HERE 
-
-## Questions
+[https://www.youtube.com/watch?v=RRkIdEYdp2Q&ab_channel=ScenicRelaxation4K](vide demonstration of employee management tracker sytem)
+## Contributions
 
 Please review my work at https://github.com/rachelleboeuf
 
