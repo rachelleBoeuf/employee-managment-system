@@ -10,9 +10,8 @@ npm install
 
 node server.js
 
-mysql -u root
+mysql.exe -uroot -p
 
-SOURCE db/schema.sql
 
 SOURCE db/seeds.sql
 
