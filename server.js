@@ -57,20 +57,39 @@ const addDepartment = async () => {
     .then(async (answers) => {
         db.query('INSERT INTO department (name) VALUES (?)',[answers.name]);
         printTable(await queryTable('department'));
+        delayMainMenu();
     });
 }
 
 const addRole = async () => {
+    let departments = await getOptionIDList('department', ['name']);
+
     inquirer.prompt([
         {
-            type: "input",
-            message: "Enter New Role Name:",
-            name: "name",
+            type: "list",
+            message: "What Department is this Role for?",
+            choices: departments,
+            name: "department_id",
         },
     ])
     .then(async (answers) => {
-        db.query('INSERT INTO role (name) VALUES (?)',[answers.name]);
-        printTable(await queryTable('role'));
+        inquirer.prompt([
+            {
+                type: "input",
+                message: "Enter New Role Name:",
+                name: "title",
+            },
+            {
+                type: "number",
+                message: "What is the salary for this Role:",
+                name: "salary",
+            },
+        ])
+        .then(async (role) => {
+            db.query('INSERT INTO role (department_id, title, salary) VALUES (?,?,?)', [answers.department_id, role.title, role.salary ]);
+            printTable(await queryTable('role'));
+            delayMainMenu();
+        });
     });
 }
 
