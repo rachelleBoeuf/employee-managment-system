@@ -1,7 +1,7 @@
 -- HOST: localhost
 -- USER: root
 -- PASS: Linksys123.
-USE EMSDB;
+USE employee_cms;
 
 DROP TABLE IF EXISTS `department`;
 CREATE TABLE IF NOT EXISTS `department` (

@@ -1,7 +1,7 @@
 # --reset all tables
-DELETE FROM `department`;
-DELETE FROM `role`;
-DELETE FROM `employee`;
+DELETE FROM `department` where 1=1;
+DELETE FROM `role` where 1=1;
+DELETE FROM `employee` where 1=1;
 
 # --insert all seed data
 INSERT INTO `department`(`id`, `name`) values(4, 'Corporate Office');
